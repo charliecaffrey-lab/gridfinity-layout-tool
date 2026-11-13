@@ -68,6 +68,7 @@ import { LocalMutationsProvider } from '@/shared/contexts';
 import { DesignStoreRegistration } from '@/shell/registrations/DesignStoreRegistration';
 import { LinkedRiseRegistration } from '@/shell/registrations/LinkedRiseRegistration';
 import { KdSolverRegistration } from '@/shell/registrations/KdSolverRegistration';
+import { KdEmbedRegistration } from '@/shell/registrations/KdEmbedRegistration';
 import { useTranslation } from '@/i18n';
 import { useCommandPalette } from '@/features/command-palette';
 import { useEngagementNudges } from '@/features/engagement';
@@ -501,6 +502,7 @@ export default function App() {
       <DesignStoreRegistration />
       <LinkedRiseRegistration />
       <KdSolverRegistration />
+      <KdEmbedRegistration />
       <BackgroundMountBoundary mountName="SyncSessionMount">
         <Suspense fallback={null}>
           <LazySyncSessionMount />

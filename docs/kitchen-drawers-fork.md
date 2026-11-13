@@ -33,6 +33,27 @@ on every merge from upstream.
 | `src/shared/kdSolver/KdSolverPanel.tsx`            | The sidebar controls. English only, on purpose: no locale files touched.    |
 | `src/shell/registrations/KdSolverRegistration.tsx` | Adds the command rules to the bus.                                          |
 | `src/shared/kdSolver/*.test.ts`                    | Tests for all of the above.                                                 |
+| `src/shared/kdEmbed/protocol.ts`                   | Messages exchanged with the kitchen app. The kitchen app keeps a copy.      |
+| `src/shared/kdEmbed/bridge.ts`                     | The embed bridge (see below).                                               |
+| `src/shell/registrations/KdEmbedRegistration.tsx`  | Starts the bridge when the page is opened with `?kd=1&kdParent=<origin>`.   |
+
+## The embed bridge
+
+Our long-lived branch is `kitchen-drawers`; `main` stays a clean copy of upstream.
+
+When the kitchen app shows this editor in a frame it opens
+`/?kd=1&kdParent=<the kitchen app's origin>`. The bridge then:
+
+1. sends `kd:ready` to the parent;
+2. receives `kd:load` with a drawer id, name, measured inside size and the saved
+   layout (or none), and opens it as that drawer's working copy. A saved layout
+   is loaded without regenerating ids, so bin ids stay the same across saves;
+3. sends `kd:changed` when the layout is edited;
+4. answers `kd:get-layout` with the layout JSON, including any linked bin designs.
+
+The kitchen app's database is the source of truth. This browser's library only
+holds a working copy per drawer, which the next `kd:load` overwrites. Messages
+are accepted only from the origin named in the URL and only from the parent window.
 
 ## Upstream files we touch
 
@@ -40,7 +61,7 @@ on every merge from upstream.
 | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/shared/hooks/interactions/useResizeInteraction.ts` | A single-bin resize asks the solver first; neighbors it moves are previewed and committed with the bin. Marked with `// kd:` comments. |
 | `src/shared/hooks/interactions/useDragInteraction.ts`   | A pinned bin does not start a drag, and drops out of a group drag.                                                                     |
-| `src/App.tsx`                                           | Mounts `KdSolverRegistration` (two lines).                                                                                             |
+| `src/App.tsx`                                           | Mounts `KdSolverRegistration` and `KdEmbedRegistration` (four lines).                                                                  |
 | `src/shell/Sidebar/Sidebar.tsx`                         | Mounts `KdSolverPanel` (import plus one element).                                                                                      |
 
 ## Known limits

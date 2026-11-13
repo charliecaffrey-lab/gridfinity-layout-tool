@@ -1,0 +1,207 @@
+/**
+ * Kitchen Drawers embed bridge. When the editor is opened in a frame with
+ * `?kd=1&kdParent=<origin>`, the parent page hands it one drawer's layout and
+ * asks for it back on save. The parent's database is the source of truth; this
+ * browser's own library is only a working copy, one entry per drawer.
+ */
+import { createLayoutWithSettings } from '@/core/constants';
+import { useHistoryStore } from '@/core/cqrs/undo/historyStore';
+import { isErr, isOk } from '@/core/result';
+import {
+  createLayoutEntry,
+  exportLayoutJSONWithDesigns,
+  restoreEmbeddedDesigns,
+  switchActiveLayout,
+} from '@/core/storage';
+import {
+  queueLibraryWrite,
+  saveOpenLayout,
+  useLayoutStore,
+  useLibraryStore,
+  useSelectionStore,
+  useSettingsStore,
+} from '@/core/store';
+import type { Layout, LayoutId } from '@/core/types';
+import { layoutId as toLayoutId } from '@/core/types';
+import { buildDrawerLinkLayout } from '@/shared/utils/drawerLink';
+import { validateImport } from '@/shared/utils/validationImport';
+import { isKdParentMessage } from './protocol';
+import type { KdEditorMessage, KdLoadMessage } from './protocol';
+
+const MAP_KEY = 'kd-drawer-layouts-v1';
+
+function readMap(): Record<string, string | undefined> {
+  try {
+    const parsed: unknown = JSON.parse(globalThis.localStorage.getItem(MAP_KEY) ?? '{}');
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, string | undefined>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberLayout(drawerId: string, id: string): void {
+  try {
+    globalThis.localStorage.setItem(MAP_KEY, JSON.stringify({ ...readMap(), [drawerId]: id }));
+  } catch {
+    // Without storage every visit simply makes a fresh working copy.
+  }
+}
+
+/** Parse a saved layout without regenerating ids, so bin ids stay stable across saves. */
+export async function kdLayoutFromMessage(message: KdLoadMessage): Promise<Layout | string> {
+  if (message.layoutJson !== null) {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(message.layoutJson) as Record<string, unknown>;
+    } catch {
+      return 'The saved layout is not valid JSON.';
+    }
+    delete parsed._meta;
+    const validation = validateImport(parsed);
+    if (!validation.valid) return validation.errors.join('; ');
+    const restored = await restoreEmbeddedDesigns(message.layoutJson, validation.layout);
+    return { ...restored.layout, name: message.name };
+  }
+  const base = createLayoutWithSettings(useSettingsStore.getState().settings);
+  const built = buildDrawerLinkLayout(
+    base,
+    {
+      widthMm: message.interiorMm.w,
+      depthMm: message.interiorMm.d,
+      heightMm: message.interiorMm.h,
+      name: message.name,
+    },
+    message.name
+  );
+  return isErr(built)
+    ? 'That drawer is too small or too large for a Gridfinity grid.'
+    : built.value;
+}
+
+function activate(layout: Layout, id: LayoutId): void {
+  useLayoutStore.getState().importLayout(layout, id, 'init');
+  const selection = useSelectionStore.getState();
+  selection.clearSelection();
+  if (layout.layers[0]) selection.setActiveLayer(layout.layers[0].id);
+  if (layout.categories[0]) selection.setActiveCategory(layout.categories[0].id);
+  useHistoryStore.getState().clear();
+}
+
+/** Open the layout as this drawer's working copy, reusing the copy from an earlier visit. */
+async function openWorkingCopy(drawerId: string, layout: Layout): Promise<boolean> {
+  // Flush the outgoing layout first: activation would cancel an autosave still in its debounce.
+  if (isErr(await saveOpenLayout())) return false;
+
+  const known = readMap()[drawerId];
+  const library = useLibraryStore.getState().library;
+  if (known !== undefined && library.entries.some((entry) => entry.id === known)) {
+    if (library.activeLayoutId !== known) {
+      const switched = await queueLibraryWrite(async (latest) => {
+        const result = await switchActiveLayout(
+          latest.activeLayoutId,
+          useLayoutStore.getState().layout,
+          known,
+          latest
+        );
+        if (isOk(result)) useLibraryStore.getState().setLibrary(result.value.library);
+        return result;
+      });
+      if (isErr(switched)) return false;
+    }
+    activate(layout, toLayoutId(known));
+    return isOk(await saveOpenLayout());
+  }
+
+  const created = await queueLibraryWrite(async (latest) => {
+    const result = await createLayoutEntry(layout, latest, {
+      name: layout.name,
+      author: latest.settings.authorName,
+      activate: true,
+    });
+    if (isOk(result)) {
+      useLibraryStore.getState().setLibrary(result.value.library);
+      activate(result.value.layout, toLayoutId(result.value.layoutId));
+    }
+    return result;
+  });
+  if (isErr(created)) return false;
+  rememberLayout(drawerId, created.value.layoutId);
+  return true;
+}
+
+/**
+ * Start listening. Returns a function that stops the bridge.
+ * `parentOrigin` comes from the URL; messages from anywhere else are ignored.
+ */
+export function startKdEmbedBridge(parentOrigin: string, parent: Window): () => void {
+  let drawerId: string | null = null;
+  let loading = false;
+  let changeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const send = (message: KdEditorMessage): void => parent.postMessage(message, parentOrigin);
+
+  const onMessage = (event: MessageEvent): void => {
+    if (event.origin !== parentOrigin || event.source !== parent) return;
+    const message: unknown = event.data;
+    if (!isKdParentMessage(message)) return;
+
+    if (message.type === 'kd:load') {
+      loading = true;
+      void (async () => {
+        const layout = await kdLayoutFromMessage(message);
+        if (typeof layout === 'string') {
+          send({ type: 'kd:load-failed', drawerId: message.drawerId, reason: layout });
+        } else if (await openWorkingCopy(message.drawerId, layout)) {
+          drawerId = message.drawerId;
+          send({ type: 'kd:loaded', drawerId: message.drawerId });
+        } else {
+          send({
+            type: 'kd:load-failed',
+            drawerId: message.drawerId,
+            reason: 'The editor could not store a working copy in this browser.',
+          });
+        }
+      })().finally(() => {
+        loading = false;
+      });
+      return;
+    }
+
+    const { requestId } = message;
+    const current = drawerId;
+    if (current === null) {
+      send({ type: 'kd:layout-failed', requestId, reason: 'No drawer is loaded yet.' });
+      return;
+    }
+    void exportLayoutJSONWithDesigns(useLayoutStore.getState().layout).then((exported) => {
+      if (isOk(exported)) {
+        send({ type: 'kd:layout', requestId, drawerId: current, layoutJson: exported.value });
+      } else {
+        send({
+          type: 'kd:layout-failed',
+          requestId,
+          reason: 'A bin design in this layout is missing one of its imported 3D files.',
+        });
+      }
+    });
+  };
+
+  const unsubscribe = useLayoutStore.subscribe((state, previous) => {
+    if (drawerId === null || loading || state.layout === previous.layout) return;
+    if (state.lastEditSource === 'init') return;
+    const current = drawerId;
+    clearTimeout(changeTimer);
+    changeTimer = setTimeout(() => send({ type: 'kd:changed', drawerId: current }), 250);
+  });
+
+  globalThis.addEventListener('message', onMessage);
+  send({ type: 'kd:ready' });
+
+  return () => {
+    globalThis.removeEventListener('message', onMessage);
+    unsubscribe();
+    clearTimeout(changeTimer);
+  };
+}
