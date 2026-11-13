@@ -12,6 +12,8 @@ import { STAGING_ID, getBaseCellSize } from '@/core/constants';
 import { isOk } from '@/core/result';
 import { mlTracking } from '@/shared/analytics/useMLTracking';
 import { useTranslation } from '@/i18n';
+import { isBinLocked } from '@/shared/utils/binLocation';
+import { kdPinnedMessage } from '@/shared/kdSolver/editor';
 import type { InteractionContext, ModeHandlers, DragStartArgs } from './types';
 import { groupMoveLands, moveOrder, swapLands, swapUpdates } from './moveOrder';
 import type {
@@ -86,6 +88,11 @@ export function useDragInteraction(context: InteractionContext): ModeHandlers<Dr
     ) => {
       const bin = findBinById(layout, binId);
       if (!bin) return;
+      // kd: a locked bin is pinned in this fork, so it cannot be dragged at all.
+      if (isBinLocked(bin) && !duplicate) {
+        addToast({ message: kdPinnedMessage(bin), type: 'info', key: 'kd-pinned' });
+        return;
+      }
 
       const clickCoord = getGridCoords(clientX, clientY);
       if (!clickCoord) return;
@@ -140,6 +147,13 @@ export function useDragInteraction(context: InteractionContext): ModeHandlers<Dr
         const partner = findBinById(layout, id);
         return partner !== undefined && partner.layerId === bin.layerId;
       });
+      // kd: pinned bins in a selection stay where they are while the rest move.
+      if (!duplicate) {
+        binIds = binIds.filter((id) => {
+          const member = findBinById(layout, id);
+          return member !== undefined && !isBinLocked(member);
+        });
+      }
 
       setInteraction({
         type: 'drag',
@@ -162,6 +176,7 @@ export function useDragInteraction(context: InteractionContext): ModeHandlers<Dr
       setInteraction,
       activePointerIdRef,
       capturedPointerRef,
+      addToast,
     ]
   );
 

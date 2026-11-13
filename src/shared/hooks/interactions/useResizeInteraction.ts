@@ -8,6 +8,12 @@ import { isBinLocked } from '@/shared/utils/binLocation';
 import { mlTracking } from '@/shared/analytics/useMLTracking';
 import { emitSyncEvent } from '@/shared/events/syncEventBus';
 import { useTranslation } from '@/i18n';
+import {
+  kdOrderedUpdates,
+  kdPlanResize,
+  kdSetBlockedMessage,
+  kdTakeBlockedMessage,
+} from '@/shared/kdSolver/editor';
 import type { InteractionContext, ModeHandlers, ResizeStartArgs } from './types';
 import type { BinId, Coord, Rect, ValidationReason, BlockingInfo } from '@/core/types';
 
@@ -114,12 +120,17 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
       let isSnapped = false;
       let invalidReason: ValidationReason | undefined;
       let blockingInfo: BlockingInfo | undefined;
-      const otherBinIds = new Set(interaction.binIds);
+      // kd: `binIds` also carries neighbors the solver is previewing; only bins
+      // with a start rect are the ones the user is actually resizing.
+      const primaryIds = [...interaction.startRects.keys()];
+      const otherBinIds = new Set(primaryIds);
+      const kdNeighborIds: BinId[] = [];
+      kdSetBlockedMessage(undefined);
 
       const halfGridModeNow = useHalfGridModeStore.getState().halfGridMode;
       const minSizeNow = halfGridModeNow ? 0.5 : 1;
 
-      for (const binId of interaction.binIds) {
+      for (const binId of primaryIds) {
         const bin = findBinById(layout, binId);
         const startRect = interaction.startRects.get(binId);
         if (!bin || !startRect) continue;
@@ -131,6 +142,27 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
           layout.drawer,
           minSizeNow
         );
+
+        // kd: a single-bin resize goes through the layout solver (push / squeeze /
+        // fixed, pins, minimum sizes, freed space). It answers null when the
+        // editor's own placement rules reject its plan, and the code below takes over.
+        const kdPlan =
+          primaryIds.length === 1
+            ? kdPlanResize({
+                layout,
+                layerId: activeLayerId,
+                binId,
+                requested: newRect,
+                halfGrid: halfGridModeNow,
+              })
+            : null;
+        if (kdPlan) {
+          for (const [id, rect] of kdPlan.rects) newRects.set(id, rect);
+          kdNeighborIds.push(...kdPlan.neighborIds);
+          kdSetBlockedMessage(kdPlan.blockedMessage);
+          if (kdPlan.blockedMessage !== undefined) isSnapped = true;
+          continue;
+        }
 
         const result = canPlaceBin(
           {
@@ -182,6 +214,7 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
 
       setInteraction({
         ...interaction,
+        binIds: [...primaryIds, ...kdNeighborIds],
         currentRects: newRects,
         valid: allValid,
         isSnapped,
@@ -199,6 +232,10 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
   const handleUp = useCallback(() => {
     const interaction = useInteractionStore.getState().interaction;
     if (!interaction || interaction.type !== 'resize') return;
+
+    // kd: say why the solver held the resize back (which bin, or which minimum).
+    const kdBlocked = kdTakeBlockedMessage();
+    if (kdBlocked !== undefined) addToast(kdBlocked, 'info');
 
     // Only commit if the resize was valid; show feedback when it isn't
     if (!interaction.valid) {
@@ -255,17 +292,15 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
         }
       }
 
+      // kd: neighbors the solver moved are applied too, in an order where each
+      // step is collision-free on its own (farthest pushed bin first).
       execute(() => {
-        for (const binId of interaction.binIds) {
-          const currentRect = interaction.currentRects.get(binId);
-          if (!currentRect) continue;
-
-          updateBin(binId, {
-            x: currentRect.x,
-            y: currentRect.y,
-            width: currentRect.width,
-            depth: currentRect.depth,
-          });
+        for (const { id, rect } of kdOrderedUpdates(
+          layout,
+          activeLayerId,
+          interaction.currentRects
+        )) {
+          updateBin(id, rect);
         }
       });
 
@@ -297,7 +332,9 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
       const emittedDesigns = new Set<string>();
       for (const binId of interaction.binIds) {
         const bin = findBinById(layout, binId);
-        const startRect = interaction.startRects.get(binId);
+        // kd: solver-resized neighbors have no start rect; their size before the
+        // drop is still the bin's own.
+        const startRect = interaction.startRects.get(binId) ?? bin;
         const currentRect = interaction.currentRects.get(binId);
         if (!bin?.linkedDesignId || !startRect || !currentRect) continue;
         if (emittedDesigns.has(bin.linkedDesignId)) continue;
@@ -319,7 +356,7 @@ export function useResizeInteraction(context: InteractionContext): ModeHandlers<
     }
 
     // Note: setInteraction(null) is called by the parent hook
-  }, [layout, execute, updateBin, t, addToast]);
+  }, [layout, activeLayerId, execute, updateBin, t, addToast]);
 
   return { start, handleMove, handleUp };
 }

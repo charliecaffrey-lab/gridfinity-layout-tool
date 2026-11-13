@@ -67,6 +67,7 @@ import { ShellGrid } from '@/shell/layouts/ShellGrid';
 import { LocalMutationsProvider } from '@/shared/contexts';
 import { DesignStoreRegistration } from '@/shell/registrations/DesignStoreRegistration';
 import { LinkedRiseRegistration } from '@/shell/registrations/LinkedRiseRegistration';
+import { KdSolverRegistration } from '@/shell/registrations/KdSolverRegistration';
 import { useTranslation } from '@/i18n';
 import { useCommandPalette } from '@/features/command-palette';
 import { useEngagementNudges } from '@/features/engagement';
@@ -499,6 +500,7 @@ export default function App() {
       </h1>
       <DesignStoreRegistration />
       <LinkedRiseRegistration />
+      <KdSolverRegistration />
       <BackgroundMountBoundary mountName="SyncSessionMount">
         <Suspense fallback={null}>
           <LazySyncSessionMount />

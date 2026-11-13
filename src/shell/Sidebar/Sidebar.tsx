@@ -32,6 +32,7 @@ import { ICON_PATHS } from '@/shared/constants/iconPaths';
 import { DOCS_URL } from '@/shared/constants/links';
 import { helpJumpEventName } from '@/shared/help/helpJumpDispatcher';
 import { PanelSection } from '@/shared/components/PanelSection';
+import { KdSolverPanel } from '@/shared/kdSolver/KdSolverPanel';
 import { StickyGroupHeader } from '@/shared/components/StickyGroupHeader';
 
 // Lazy load modals/galleries - only loaded when opened (using lazyWithRetry for PWA resilience)
@@ -209,6 +210,10 @@ export function Sidebar() {
           >
             <div data-active-layer-panel className="border-b border-stroke-subtle">
               <ActiveLayerPanel />
+            </div>
+
+            <div data-kd-solver-panel className="border-b border-stroke-subtle">
+              <KdSolverPanel />
             </div>
 
             <div data-layers-panel data-help-target="layers-panel">
