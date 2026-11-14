@@ -161,3 +161,66 @@ describe('kdFindFreeSpot', () => {
     expect(kdFindFreeSpot(layout, layer, { w: 3, d: 3, h: 3 })).toBeNull();
   });
 });
+
+describe('cradle pockets (stepped outlines from a 3D scan)', () => {
+  const square = (side: number): { x: number; y: number }[] => [
+    { x: 30 - side / 2, y: 30 - side / 2 },
+    { x: 30 + side / 2, y: 30 - side / 2 },
+    { x: 30 + side / 2, y: 30 + side / 2 },
+    { x: 30 - side / 2, y: 30 + side / 2 },
+  ];
+  const levels = [
+    { depthMm: 20, outlines: [square(20)] },
+    { depthMm: 12, outlines: [square(40)] },
+    { depthMm: 6, outlines: [square(60)] },
+  ];
+  const cradle = request({ shape: 'cradle', lengthMm: 60, widthMm: 60, heightMm: 30, levels });
+
+  it('cuts one path pocket per step, each to its own depth, all centred on the same spot', () => {
+    const result = plan(cradle);
+    expect(result.params.cutouts.map((cut) => [cut.shape, cut.cutDepth])).toEqual([
+      ['path', 20],
+      ['path', 12],
+      ['path', 6],
+    ]);
+    const centres = result.params.cutouts.map((cut) => {
+      const xs = (cut.path ?? []).map((p) => p.x);
+      const ys = (cut.path ?? []).map((p) => p.y);
+      return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+    });
+    expect(centres[1][0]).toBeCloseTo(centres[0][0], 6);
+    expect(centres[2][1]).toBeCloseTo(centres[0][1], 6);
+    const { innerW, innerD } = getInteriorDims(result.params);
+    expect(innerW).toBeGreaterThanOrEqual(60 + 2 * 0.5 + 4);
+    expect(innerD).toBeGreaterThanOrEqual(60 + 2 * 0.5 + 4);
+    expect(result.params.style).toBe('solid');
+    expect(result.params.base.solid).toBe(true);
+  });
+
+  it('refuses a cradle deeper than the drawer allows instead of cutting a different shape', () => {
+    const tooDeep = kdPlanFittedBin(
+      request({ shape: 'cradle', levels }, { pocketDepthMm: 80 }),
+      DEFAULT_BIN_PARAMS,
+      grid
+    );
+    expect(typeof tooDeep).toBe('string');
+    expect(tooDeep).toContain('too low');
+  });
+
+  it('checks the message: a cradle needs its steps, and they must be sane', () => {
+    expect(isKdParentMessage(cradle)).toBe(true);
+    expect(isKdParentMessage(request({ shape: 'cradle' }))).toBe(false);
+    expect(isKdParentMessage(request({ shape: 'cradle', levels: [] }))).toBe(false);
+    expect(
+      isKdParentMessage(
+        request({ shape: 'cradle', levels: [{ depthMm: -1, outlines: [square(20)] }] })
+      )
+    ).toBe(false);
+    expect(
+      isKdParentMessage(
+        request({ shape: 'cradle', levels: [{ depthMm: 5, outlines: [[{ x: 0, y: 0 }]] }] })
+      )
+    ).toBe(false);
+    expect(isKdParentMessage(request({ shape: 'rect' }))).toBe(true);
+  });
+});

@@ -28,8 +28,24 @@ export interface FittedPlan {
   notes: string[];
 }
 
+function cradleBounds(
+  item: KdAddFittedBinMessage['item']
+): { minX: number; minY: number; w: number; d: number } | null {
+  const points = (item.levels ?? []).flatMap((level) => level.outlines.flat());
+  if (points.length < 3) return null;
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    w: Math.max(...xs) - Math.min(...xs),
+    d: Math.max(...ys) - Math.min(...ys),
+  };
+}
+
 function pocketSize(item: KdAddFittedBinMessage['item']): { w: number; d: number } {
   if (item.shape === 'round') return { w: item.lengthMm, d: item.lengthMm };
+  if (item.shape === 'cradle') return cradleBounds(item) ?? { w: 0, d: 0 };
   if (item.shape === 'outline' && item.outline && item.outline.length >= 3) {
     const xs = item.outline.map((p) => p.x);
     const ys = item.outline.map((p) => p.y);
@@ -100,6 +116,10 @@ export function kdPlanFittedBin(
   const h = Math.min(Math.max(2, wantedH), maxH);
   const deepest = (h - 1) * layout.heightUnitMm - FLOOR_MM;
   const pocketDepthMm = Math.min(message.pocketDepthMm, deepest);
+  if (item.shape === 'cradle' && pocketDepthMm < message.pocketDepthMm) {
+    // A shallower cradle is a different shape, not the same one cut short, so the caller has to ask again.
+    return `This drawer is too low for a cradle ${message.pocketDepthMm.toFixed(1)} mm deep. The deepest that fits is ${pocketDepthMm.toFixed(1)} mm.`;
+  }
   if (pocketDepthMm < message.pocketDepthMm) {
     notes.push(
       `The drawer is ${maxH} height units tall, so the pocket is ${pocketDepthMm.toFixed(1)} mm deep instead of ${message.pocketDepthMm.toFixed(1)} mm.`
@@ -111,7 +131,12 @@ export function kdPlanFittedBin(
   const x = (innerW - pocket.w) / 2;
   const y = (innerD - notch - pocket.d) / 2;
 
-  const shape = item.shape === 'round' ? 'circle' : item.shape === 'outline' ? 'path' : 'rectangle';
+  const shape =
+    item.shape === 'round'
+      ? 'circle'
+      : item.shape === 'outline' || item.shape === 'cradle'
+        ? 'path'
+        : 'rectangle';
   let cut: Cutout = {
     ...createDefaultCutout('kd-pocket', shape, x, y, pocket.w, pocket.d),
     cutDepth: pocketDepthMm,
@@ -150,7 +175,43 @@ export function kdPlanFittedBin(
     };
   }
 
-  const cutouts: Cutout[] = [cut];
+  let cutouts: Cutout[] = [cut];
+  const bounds = item.shape === 'cradle' ? cradleBounds(item) : null;
+  if (bounds && item.levels) {
+    // One path pocket per outline per step. Deeper steps are smaller and sit inside the shallower ones.
+    cutouts = [];
+    item.levels.forEach((level, levelIndex) => {
+      level.outlines.forEach((outline, outlineIndex) => {
+        const points = cleanOutline(outline);
+        if (points.length < 3) return;
+        const xs = points.map((p) => p.x);
+        const ys = points.map((p) => p.y);
+        const left = Math.min(...xs);
+        const front = Math.min(...ys);
+        cutouts.push({
+          ...createDefaultCutout(
+            `kd-cradle-${levelIndex}-${outlineIndex}`,
+            'path',
+            x + left - bounds.minX,
+            y + front - bounds.minY,
+            Math.max(...xs) - left,
+            Math.max(...ys) - front
+          ),
+          cutDepth: Math.min(level.depthMm, pocketDepthMm),
+          clearance,
+          name: `${item.name.slice(0, 28)} step ${levelIndex + 1}`,
+          path: points.map((p) => ({
+            x: x + p.x - bounds.minX,
+            y: y + p.y - bounds.minY,
+            handleIn: null,
+            handleOut: null,
+            symmetric: false,
+          })),
+        });
+      });
+    });
+    if (cutouts.length === 0) return 'That scan has no outline to cut a pocket from.';
+  }
   if (message.fingerNotch) {
     // A round dip centred on the pocket's back edge, so a fingertip gets under the item.
     cutouts.push({

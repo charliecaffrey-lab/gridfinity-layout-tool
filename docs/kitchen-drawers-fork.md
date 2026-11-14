@@ -143,3 +143,13 @@ applies it as one undo step. Removals are sent with source `cascade` so the
 to reuse. The kitchen app has already run the plan through its copy of the
 solver, so the editor does not solve again; anything the editor's own
 validation still refuses is reported back by label.
+
+## Cradle pockets
+
+`kd:add-fitted-bin` also takes the shape `cradle`: `item.levels` is a list of
+steps, deepest first, each with a cut depth and one or more outlines in a
+shared frame. `fittedPlan.ts` turns every outline into its own path cutout cut
+to that step's depth; the deeper ones sit inside the shallower ones, so the
+pocket is a staircase. If the drawer is too low for the asked depth the plan
+is refused rather than cut short, because a shallower cradle is a different
+set of outlines and the kitchen app has to work it out again.

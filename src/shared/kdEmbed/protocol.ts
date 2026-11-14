@@ -48,13 +48,19 @@ export interface KdFittedItem {
   /**
    * `rect`: a length x width pocket. `round`: a circle of diameter `lengthMm`.
    * `stepped`: a rectangle whose left part is deeper. `outline`: a traced shape.
+   * `cradle`: stepped outlines that follow the item's underside (from a 3D scan).
    */
-  shape: 'rect' | 'round' | 'stepped' | 'outline';
+  shape: 'rect' | 'round' | 'stepped' | 'outline' | 'cradle';
   lengthMm: number;
   widthMm: number;
   heightMm: number;
   /** Traced outline as a closed loop of points, for `outline`. */
   outline?: { x: number; y: number }[];
+  /**
+   * For `cradle`: the pocket's steps, deepest first. Each is cut `depthMm` down
+   * from the top of the bin; all outlines share one coordinate frame.
+   */
+  levels?: { depthMm: number; outlines: { x: number; y: number }[][] }[];
   /** For `stepped`: how long the deep part is, and how deep the shallow part is cut. */
   step?: { deepLengthMm: number; shallowDepthMm: number };
 }
@@ -197,13 +203,42 @@ export function isKdParentMessage(data: unknown): data is KdParentMessage {
   if (message.type === 'kd:add-fitted-bin') {
     const item = message.item as Record<string, unknown> | null | undefined;
     const positive = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v > 0;
+    const isPoint = (p: unknown): boolean =>
+      typeof p === 'object' &&
+      p !== null &&
+      Number.isFinite((p as { x: unknown }).x) &&
+      Number.isFinite((p as { y: unknown }).y);
+    const levels = item?.levels;
+    const levelsOk =
+      levels === undefined
+        ? item?.shape !== 'cradle'
+        : Array.isArray(levels) &&
+          levels.length >= 1 &&
+          levels.length <= 12 &&
+          levels.every(
+            (level: unknown) =>
+              typeof level === 'object' &&
+              level !== null &&
+              positive((level as { depthMm: unknown }).depthMm) &&
+              Array.isArray((level as { outlines: unknown }).outlines) &&
+              (level as { outlines: unknown[] }).outlines.length >= 1 &&
+              (level as { outlines: unknown[] }).outlines.length <= 8 &&
+              (level as { outlines: unknown[] }).outlines.every(
+                (outline) =>
+                  Array.isArray(outline) &&
+                  outline.length >= 3 &&
+                  outline.length <= 200 &&
+                  outline.every(isPoint)
+              )
+          );
     return (
+      levelsOk &&
       typeof message.requestId === 'string' &&
       typeof item === 'object' &&
       item !== null &&
       typeof item.id === 'string' &&
       typeof item.name === 'string' &&
-      ['rect', 'round', 'stepped', 'outline'].includes(item.shape as string) &&
+      ['rect', 'round', 'stepped', 'outline', 'cradle'].includes(item.shape as string) &&
       positive(item.lengthMm) &&
       positive(item.widthMm) &&
       positive(item.heightMm) &&
