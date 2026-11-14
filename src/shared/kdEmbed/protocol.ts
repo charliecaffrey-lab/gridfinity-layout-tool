@@ -41,7 +41,37 @@ export interface KdExportPrintSetMessage {
   uploadUrl: string;
 }
 
-export type KdParentMessage = KdLoadMessage | KdGetLayoutMessage | KdExportPrintSetMessage;
+/** A catalog item to make a fitted bin for. Lengths in millimetres. */
+export interface KdFittedItem {
+  id: string;
+  name: string;
+  /**
+   * `rect`: a length x width pocket. `round`: a circle of diameter `lengthMm`.
+   * `stepped`: a rectangle whose left part is deeper. `outline`: a traced shape.
+   */
+  shape: 'rect' | 'round' | 'stepped' | 'outline';
+  lengthMm: number;
+  widthMm: number;
+  heightMm: number;
+  /** Traced outline as a closed loop of points, for `outline`. */
+  outline?: { x: number; y: number }[];
+  /** For `stepped`: how long the deep part is, and how deep the shallow part is cut. */
+  step?: { deepLengthMm: number; shallowDepthMm: number };
+}
+
+export interface KdAddFittedBinMessage {
+  type: 'kd:add-fitted-bin';
+  requestId: string;
+  item: KdFittedItem;
+  /** Gap left around the item on every side. */
+  clearanceMm: number;
+  pocketDepthMm: number;
+  /** Add a round dip at the back edge so a fingertip can lift the item. */
+  fingerNotch: boolean;
+}
+
+export type KdParentMessage =
+  KdLoadMessage | KdGetLayoutMessage | KdExportPrintSetMessage | KdAddFittedBinMessage;
 
 export type KdEditorMessage =
   | { type: 'kd:ready' }
@@ -50,6 +80,18 @@ export type KdEditorMessage =
   | { type: 'kd:changed'; drawerId: string }
   | { type: 'kd:layout'; requestId: string; drawerId: string; layoutJson: string }
   | { type: 'kd:layout-failed'; requestId: string; reason: string }
+  | {
+      type: 'kd:fitted-bin-done';
+      requestId: string;
+      ok: boolean;
+      binId?: string;
+      /** Bin footprint in grid units and height in height units. */
+      units?: { w: number; d: number; h: number };
+      /** `grid`: placed in the drawer. `stash`: no free spot, so it waits in the editor's stash. */
+      placed?: 'grid' | 'stash';
+      notes?: string[];
+      reason?: string;
+    }
   | {
       type: 'kd:print-set-done';
       requestId: string;
@@ -74,6 +116,34 @@ export function isKdParentMessage(data: unknown): data is KdParentMessage {
       typeof bed === 'object' &&
       bed !== null &&
       [bed.w, bed.d].every((v) => typeof v === 'number' && v >= 100 && v <= 1000)
+    );
+  }
+  if (message.type === 'kd:add-fitted-bin') {
+    const item = message.item as Record<string, unknown> | null | undefined;
+    const positive = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v > 0;
+    return (
+      typeof message.requestId === 'string' &&
+      typeof item === 'object' &&
+      item !== null &&
+      typeof item.id === 'string' &&
+      typeof item.name === 'string' &&
+      ['rect', 'round', 'stepped', 'outline'].includes(item.shape as string) &&
+      positive(item.lengthMm) &&
+      positive(item.widthMm) &&
+      positive(item.heightMm) &&
+      (item.outline === undefined ||
+        (Array.isArray(item.outline) &&
+          item.outline.length <= 200 &&
+          item.outline.every(
+            (p: unknown) =>
+              typeof p === 'object' &&
+              p !== null &&
+              Number.isFinite((p as { x: unknown }).x) &&
+              Number.isFinite((p as { y: unknown }).y)
+          ))) &&
+      typeof message.clearanceMm === 'number' &&
+      positive(message.pocketDepthMm) &&
+      typeof message.fingerNotch === 'boolean'
     );
   }
   if (message.type !== 'kd:load') return false;

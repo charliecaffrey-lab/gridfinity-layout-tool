@@ -75,6 +75,29 @@ The bridge only reports `kd:changed` once the person has clicked or typed in
 the editor: a freshly loaded layout with linked designs is adjusted by the
 editor itself, and that is not an edit.
 
+## Fitted bins
+
+The kitchen app can ask for a bin fitted to one catalog item with
+`kd:add-fitted-bin` (the item's size in mm, a pocket shape, clearance, pocket
+depth and whether to add a finger notch). `src/shell/kdFitted/`:
+
+- `fittedPlan.ts` (pure) picks the smallest bin whose inside holds the pocket
+  plus clearance and 2 mm of plastic around it, and builds the design: a
+  **solid** bin with one cutout. Shapes: rectangle, circle, a traced outline as
+  a `path` cutout, or a stepped pocket using the cutout's `split`.
+- `addFittedBin.ts` saves the design, adds a bin linked to it in the first free
+  spot (or the stash when the drawer is full), and stamps the bin with
+  `kd.minW`, `kd.minD` and `kd.itemId`, so the solver never squeezes it below
+  its footprint and the kitchen app knows what it holds.
+
+Trap: a solid bin needs `style: 'solid'` AND `base.solid: true`. With the style
+alone the generator exports an ordinary hollow bin and silently drops the
+pocket. Unit tests cannot see this; measure an exported STL.
+
+New drawers also get interlocking baseplate connectors (`connectorNubs` with
+the `puzzle` style), set in `kdLayoutFromMessage`, so the printed baseplate
+pieces hold together. Existing layouts are left as they are.
+
 ## Upstream files we touch
 
 | File                                                    | Change                                                                                                                                 |

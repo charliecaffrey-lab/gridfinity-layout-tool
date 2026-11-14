@@ -26,7 +26,21 @@ import { layoutId as toLayoutId } from '@/core/types';
 import { buildDrawerLinkLayout } from '@/shared/utils/drawerLink';
 import { validateImport } from '@/shared/utils/validationImport';
 import { isKdParentMessage } from './protocol';
-import type { KdEditorMessage, KdExportPrintSetMessage, KdLoadMessage } from './protocol';
+import type {
+  KdAddFittedBinMessage,
+  KdEditorMessage,
+  KdExportPrintSetMessage,
+  KdLoadMessage,
+} from './protocol';
+
+export interface KdFittedBinResult {
+  ok: boolean;
+  binId?: string;
+  units?: { w: number; d: number; h: number };
+  placed?: 'grid' | 'stash';
+  notes?: string[];
+  reason?: string;
+}
 
 export interface KdPrintSetResult {
   ok: boolean;
@@ -37,6 +51,7 @@ export interface KdPrintSetResult {
 /** Work the bridge cannot do itself because it needs feature code; the app shell supplies it. */
 export interface KdBridgeHandlers {
   exportPrintSet?: (message: KdExportPrintSetMessage) => Promise<KdPrintSetResult>;
+  addFittedBin?: (message: KdAddFittedBinMessage) => Promise<KdFittedBinResult>;
 }
 
 const MAP_KEY = 'kd-drawer-layouts-v1';
@@ -86,8 +101,16 @@ export async function kdLayoutFromMessage(message: KdLoadMessage): Promise<Layou
     },
     message.name
   );
-  return isErr(built)
-    ? 'That drawer is too small or too large for a Gridfinity grid.'
+  if (isErr(built)) return 'That drawer is too small or too large for a Gridfinity grid.';
+  // A drawer's baseplate is usually printed in several pieces. Give a new drawer
+  // interlocking puzzle tabs so the pieces hold together; it can be changed on
+  // the Baseplate tab.
+  const baseplate = built.value.baseplateParams;
+  return baseplate
+    ? {
+        ...built.value,
+        baseplateParams: { ...baseplate, connectorNubs: true, connectorStyle: 'puzzle' },
+      }
     : built.value;
 }
 
@@ -189,6 +212,23 @@ export function startKdEmbedBridge(
       })().finally(() => {
         loading = false;
       });
+      return;
+    }
+
+    if (message.type === 'kd:add-fitted-bin') {
+      const { requestId } = message;
+      const refuse = (reason: string): void =>
+        send({ type: 'kd:fitted-bin-done', requestId, ok: false, reason });
+      if (drawerId === null) refuse('No drawer is loaded yet.');
+      else if (!handlers.addFittedBin) refuse('This editor build cannot make fitted bins.');
+      else {
+        // A new bin is a change worth saving even if the person never clicked in the editor.
+        userActed = true;
+        void handlers
+          .addFittedBin(message)
+          .catch(() => ({ ok: false, reason: 'Making the fitted bin stopped with an error.' }))
+          .then((result) => send({ type: 'kd:fitted-bin-done', requestId, ...result }));
+      }
       return;
     }
 
