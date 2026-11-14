@@ -26,7 +26,18 @@ import { layoutId as toLayoutId } from '@/core/types';
 import { buildDrawerLinkLayout } from '@/shared/utils/drawerLink';
 import { validateImport } from '@/shared/utils/validationImport';
 import { isKdParentMessage } from './protocol';
-import type { KdEditorMessage, KdLoadMessage } from './protocol';
+import type { KdEditorMessage, KdExportPrintSetMessage, KdLoadMessage } from './protocol';
+
+export interface KdPrintSetResult {
+  ok: boolean;
+  linkedBins: number;
+  reason?: string;
+}
+
+/** Work the bridge cannot do itself because it needs feature code; the app shell supplies it. */
+export interface KdBridgeHandlers {
+  exportPrintSet?: (message: KdExportPrintSetMessage) => Promise<KdPrintSetResult>;
+}
 
 const MAP_KEY = 'kd-drawer-layouts-v1';
 
@@ -135,9 +146,20 @@ async function openWorkingCopy(drawerId: string, layout: Layout): Promise<boolea
  * Start listening. Returns a function that stops the bridge.
  * `parentOrigin` comes from the URL; messages from anywhere else are ignored.
  */
-export function startKdEmbedBridge(parentOrigin: string, parent: Window): () => void {
+export function startKdEmbedBridge(
+  parentOrigin: string,
+  parent: Window,
+  handlers: KdBridgeHandlers = {}
+): () => void {
   let drawerId: string | null = null;
   let loading = false;
+  // A freshly loaded layout is tidied by the editor itself (linked designs
+  // re-sync their bins). Those are not the person's edits, so nothing counts as
+  // a change until they have clicked or typed in the editor.
+  let userActed = false;
+  const markActed = (): void => {
+    userActed = true;
+  };
   let changeTimer: ReturnType<typeof setTimeout> | undefined;
 
   const send = (message: KdEditorMessage): void => parent.postMessage(message, parentOrigin);
@@ -149,6 +171,7 @@ export function startKdEmbedBridge(parentOrigin: string, parent: Window): () => 
 
     if (message.type === 'kd:load') {
       loading = true;
+      userActed = false;
       void (async () => {
         const layout = await kdLayoutFromMessage(message);
         if (typeof layout === 'string') {
@@ -166,6 +189,30 @@ export function startKdEmbedBridge(parentOrigin: string, parent: Window): () => 
       })().finally(() => {
         loading = false;
       });
+      return;
+    }
+
+    if (message.type === 'kd:export-print-set') {
+      const { requestId } = message;
+      const refuse = (reason: string): void =>
+        send({ type: 'kd:print-set-done', requestId, ok: false, linkedBins: 0, reason });
+      let uploadOrigin: string | null;
+      try {
+        uploadOrigin = new URL(message.uploadUrl).origin;
+      } catch {
+        uploadOrigin = null;
+      }
+      if (drawerId === null) refuse('No drawer is loaded yet.');
+      else if (uploadOrigin !== parentOrigin) refuse('The upload address is not the kitchen app.');
+      else if (!handlers.exportPrintSet) refuse('This editor build cannot export print sets.');
+      else {
+        // The export links plain bins to designs, which is a change worth saving.
+        userActed = true;
+        void handlers
+          .exportPrintSet(message)
+          .catch(() => ({ ok: false, linkedBins: 0, reason: 'The export stopped with an error.' }))
+          .then((result) => send({ type: 'kd:print-set-done', requestId, ...result }));
+      }
       return;
     }
 
@@ -189,7 +236,7 @@ export function startKdEmbedBridge(parentOrigin: string, parent: Window): () => 
   };
 
   const unsubscribe = useLayoutStore.subscribe((state, previous) => {
-    if (drawerId === null || loading || state.layout === previous.layout) return;
+    if (drawerId === null || loading || !userActed || state.layout === previous.layout) return;
     if (state.lastEditSource === 'init') return;
     const current = drawerId;
     clearTimeout(changeTimer);
@@ -197,10 +244,14 @@ export function startKdEmbedBridge(parentOrigin: string, parent: Window): () => 
   });
 
   globalThis.addEventListener('message', onMessage);
+  globalThis.addEventListener('pointerdown', markActed, true);
+  globalThis.addEventListener('keydown', markActed, true);
   send({ type: 'kd:ready' });
 
   return () => {
     globalThis.removeEventListener('message', onMessage);
+    globalThis.removeEventListener('pointerdown', markActed, true);
+    globalThis.removeEventListener('keydown', markActed, true);
     unsubscribe();
     clearTimeout(changeTimer);
   };

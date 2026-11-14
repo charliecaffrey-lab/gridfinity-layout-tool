@@ -55,6 +55,26 @@ The kitchen app's database is the source of truth. This browser's library only
 holds a working copy per drawer, which the next `kd:load` overwrites. Messages
 are accepted only from the origin named in the URL and only from the parent window.
 
+## Print sets
+
+The kitchen app can ask for one drawer's print files with `kd:export-print-set`
+(a file-name stem, `3mf` or `stl`, the printer's bed in mm, and an upload
+address on the kitchen app's own origin). `src/shell/kdPrintSet/exportPrintSet.ts` then:
+
+1. gives every plain bin a default bin design at its size and links it, because
+   upstream only exports bins that have a design. Same-sized whole-unit bins
+   share one design; half-unit bins get their own;
+2. sets the layout's print bed to the printer's;
+3. runs upstream's own whole-layout export, with its "also POST exports to a
+   URL" setting pointed at the upload address for the length of that one call.
+
+Nothing in upstream's export code is changed. The editor answers
+`kd:print-set-done`; the browser also downloads the ZIP as upstream always does.
+
+The bridge only reports `kd:changed` once the person has clicked or typed in
+the editor: a freshly loaded layout with linked designs is adjusted by the
+editor itself, and that is not an edit.
+
 ## Upstream files we touch
 
 | File                                                    | Change                                                                                                                                 |
