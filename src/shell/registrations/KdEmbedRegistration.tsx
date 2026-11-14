@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { startKdEmbedBridge } from '@/shared/kdEmbed/bridge';
 import { readKdParentOrigin } from '@/shared/kdEmbed/protocol';
+import { kdApplyBins } from '@/shell/kdApply/applyBins';
 import { kdAddFittedBin } from '@/shell/kdFitted/addFittedBin';
 import { kdExportPrintSet } from '@/shell/kdPrintSet/exportPrintSet';
 import { useLayoutExport } from '@/shell/layoutExport/useLayoutExport';
@@ -23,6 +24,7 @@ export function KdEmbedRegistration(): null {
     return startKdEmbedBridge(parentOrigin, window.parent, {
       exportPrintSet: (message) => kdExportPrintSet(message, exportRef.current),
       addFittedBin: kdAddFittedBin,
+      applyBins: kdApplyBins,
     });
   }, []);
   return null;

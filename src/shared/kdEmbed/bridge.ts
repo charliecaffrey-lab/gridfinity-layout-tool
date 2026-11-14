@@ -28,10 +28,18 @@ import { validateImport } from '@/shared/utils/validationImport';
 import { isKdParentMessage } from './protocol';
 import type {
   KdAddFittedBinMessage,
+  KdApplyBinsMessage,
   KdEditorMessage,
   KdExportPrintSetMessage,
   KdLoadMessage,
 } from './protocol';
+
+export interface KdApplyBinsResult {
+  ok: boolean;
+  added?: { index: number; binId: string }[];
+  failed?: string[];
+  reason?: string;
+}
 
 export interface KdFittedBinResult {
   ok: boolean;
@@ -52,6 +60,7 @@ export interface KdPrintSetResult {
 export interface KdBridgeHandlers {
   exportPrintSet?: (message: KdExportPrintSetMessage) => Promise<KdPrintSetResult>;
   addFittedBin?: (message: KdAddFittedBinMessage) => Promise<KdFittedBinResult>;
+  applyBins?: (message: KdApplyBinsMessage) => KdApplyBinsResult;
 }
 
 const MAP_KEY = 'kd-drawer-layouts-v1';
@@ -212,6 +221,31 @@ export function startKdEmbedBridge(
       })().finally(() => {
         loading = false;
       });
+      return;
+    }
+
+    if (message.type === 'kd:apply-bins') {
+      const { requestId } = message;
+      if (drawerId === null || !handlers.applyBins) {
+        send({
+          type: 'kd:bins-applied',
+          requestId,
+          ok: false,
+          reason:
+            drawerId === null
+              ? 'No drawer is loaded yet.'
+              : 'This editor build cannot apply plans.',
+        });
+        return;
+      }
+      userActed = true;
+      let result: KdApplyBinsResult;
+      try {
+        result = handlers.applyBins(message);
+      } catch {
+        result = { ok: false, reason: 'Applying the plan stopped with an error.' };
+      }
+      send({ type: 'kd:bins-applied', requestId, ...result });
       return;
     }
 

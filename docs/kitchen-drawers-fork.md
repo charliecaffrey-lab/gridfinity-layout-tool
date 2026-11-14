@@ -133,3 +133,13 @@ pnpm exec vitest run src/shared/kdSolver
 
 Commit with `git commit --no-verify`: the pre-commit hooks call pnpm, which is
 not installed on the host. Run type-check, lint and tests in Docker first.
+
+## Applying a plan from the kitchen app
+
+`kd:apply-bins` carries a checked plan (bins to remove, bins to move or resize,
+bins to add) and is answered with `kd:bins-applied`. `src/shell/kdApply/applyBins.ts`
+applies it as one undo step. Removals are sent with source `cascade` so the
+"Absorb" freed-space rule does not grow neighbors into space the plan is about
+to reuse. The kitchen app has already run the plan through its copy of the
+solver, so the editor does not solve again; anything the editor's own
+validation still refuses is reported back by label.

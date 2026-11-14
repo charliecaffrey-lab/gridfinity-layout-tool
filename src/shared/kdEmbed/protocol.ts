@@ -70,8 +70,39 @@ export interface KdAddFittedBinMessage {
   fingerNotch: boolean;
 }
 
+/** A new bin to add. Sizes in grid units, height in height units. */
+export interface KdNewBin {
+  x: number;
+  y: number;
+  w: number;
+  d: number;
+  h: number;
+  label: string;
+  /** Catalog item this bin is for, with the smallest footprint the item allows. */
+  itemId?: string;
+  itemName?: string;
+  minW?: number;
+  minD?: number;
+}
+
+/**
+ * Apply an accepted plan: remove some bins, move or resize others, add new ones.
+ * The kitchen app has already checked the plan with the layout solver.
+ */
+export interface KdApplyBinsMessage {
+  type: 'kd:apply-bins';
+  requestId: string;
+  remove: string[];
+  update: { id: string; x: number; y: number; w: number; d: number; label?: string }[];
+  add: KdNewBin[];
+}
+
 export type KdParentMessage =
-  KdLoadMessage | KdGetLayoutMessage | KdExportPrintSetMessage | KdAddFittedBinMessage;
+  | KdApplyBinsMessage
+  | KdLoadMessage
+  | KdGetLayoutMessage
+  | KdExportPrintSetMessage
+  | KdAddFittedBinMessage;
 
 export type KdEditorMessage =
   | { type: 'kd:ready' }
@@ -80,6 +111,16 @@ export type KdEditorMessage =
   | { type: 'kd:changed'; drawerId: string }
   | { type: 'kd:layout'; requestId: string; drawerId: string; layoutJson: string }
   | { type: 'kd:layout-failed'; requestId: string; reason: string }
+  | {
+      type: 'kd:bins-applied';
+      requestId: string;
+      ok: boolean;
+      /** Which of the `add` entries were added, and the ids they were given. */
+      added?: { index: number; binId: string }[];
+      /** Plain-English lines for changes the editor refused. */
+      failed?: string[];
+      reason?: string;
+    }
   | {
       type: 'kd:fitted-bin-done';
       requestId: string;
@@ -116,6 +157,41 @@ export function isKdParentMessage(data: unknown): data is KdParentMessage {
       typeof bed === 'object' &&
       bed !== null &&
       [bed.w, bed.d].every((v) => typeof v === 'number' && v >= 100 && v <= 1000)
+    );
+  }
+  if (message.type === 'kd:apply-bins') {
+    const whole = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+    const size = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v > 0;
+    const record = (v: unknown): v is Record<string, unknown> =>
+      typeof v === 'object' && v !== null;
+    return (
+      typeof message.requestId === 'string' &&
+      Array.isArray(message.remove) &&
+      message.remove.length <= 500 &&
+      message.remove.every((id: unknown) => typeof id === 'string') &&
+      Array.isArray(message.update) &&
+      message.update.length <= 500 &&
+      message.update.every(
+        (u: unknown) =>
+          record(u) &&
+          typeof u.id === 'string' &&
+          whole(u.x) &&
+          whole(u.y) &&
+          size(u.w) &&
+          size(u.d)
+      ) &&
+      Array.isArray(message.add) &&
+      message.add.length <= 500 &&
+      message.add.every(
+        (a: unknown) =>
+          record(a) &&
+          whole(a.x) &&
+          whole(a.y) &&
+          size(a.w) &&
+          size(a.d) &&
+          size(a.h) &&
+          typeof a.label === 'string'
+      )
     );
   }
   if (message.type === 'kd:add-fitted-bin') {
