@@ -17,6 +17,7 @@ import {
   recordSessionStart,
   type NudgeType,
 } from './engagementTracker';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 const CHECK_INTERVAL_MS = 60_000; // Re-check every minute
 
@@ -43,6 +44,7 @@ export function useEngagementNudges(): void {
   // prompt at a moment it can be answered honestly.
   useEffect(() => {
     function checkAndShowNudge(): void {
+      if (IS_SELF_HOSTED) return;
       const nudgeOrder: NudgeType[] = ['feedback_rating'];
       if (!hasConvertedThisSession()) return;
 

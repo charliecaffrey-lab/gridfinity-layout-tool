@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from 'react';
 import { Card } from '@/design-system';
 import { ImageIcon, SmartphoneIcon } from '@/design-system/Icon';
 import { useTranslation } from '@/i18n';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 interface ScanRouteChoiceProps {
   readonly onPhone: () => void;
@@ -12,14 +13,17 @@ interface ScanRouteChoiceProps {
 export function ScanRouteChoice({ onPhone, onComputer, phoneCardRef }: ScanRouteChoiceProps) {
   const t = useTranslation();
   return (
-    <div className="grid w-full gap-3 sm:grid-cols-2">
-      <RouteCard
-        cardRef={phoneCardRef}
-        icon={<SmartphoneIcon size="lg" />}
-        title={t('binDesigner.cutouts.scanImport.routePhone')}
-        help={t('binDesigner.cutouts.scanImport.routePhoneHelp')}
-        onClick={onPhone}
-      />
+    <div className={IS_SELF_HOSTED ? 'grid w-full gap-3' : 'grid w-full gap-3 sm:grid-cols-2'}>
+      {/* The phone route needs the scan relay, which a self-hosted build does not have. */}
+      {!IS_SELF_HOSTED && (
+        <RouteCard
+          cardRef={phoneCardRef}
+          icon={<SmartphoneIcon size="lg" />}
+          title={t('binDesigner.cutouts.scanImport.routePhone')}
+          help={t('binDesigner.cutouts.scanImport.routePhoneHelp')}
+          onClick={onPhone}
+        />
+      )}
       <RouteCard
         icon={<ImageIcon size="lg" />}
         title={t('binDesigner.cutouts.traceView.open')}

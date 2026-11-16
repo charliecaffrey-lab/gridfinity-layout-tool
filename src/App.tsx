@@ -92,6 +92,7 @@ import { useCommunityPublishReturn } from '@/shared/hooks/useCommunityPublishRet
 import { useCommunityLikeReturn } from '@/shell/hooks/useCommunityLikeReturn';
 import { useCommunityDigestCheck } from '@/shell/hooks/useCommunityDigestCheck';
 import { usePlacesFindResults } from '@/shell/hooks/usePlacesFindResults';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 let hasRenderedInitialLayout = false;
 
@@ -214,6 +215,7 @@ export default function App() {
   // their own drawer, not for someone opening a shared link.
   useWhatsNewAutoOpen({
     allowed:
+      !IS_SELF_HOSTED &&
       !hasShareUrl &&
       !hasDrawerLink &&
       !isCollaborative &&

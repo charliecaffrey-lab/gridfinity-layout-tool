@@ -21,6 +21,7 @@ import { ICON_PATHS } from '@/shared/constants/iconPaths';
 import type { SaveStatus } from '@/shared/hooks';
 import type { ShareModalRenderProps } from '@/features/layout-library/components/LayoutManagerModal';
 import { LoadingFallback } from '@/shared/components/LoadingFallback';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 // Lazy load modals - only loaded when opened (with retry for chunk load failures)
 const LayoutManagerModal = lazyWithRetry(() =>
@@ -298,7 +299,7 @@ export function Header({ saveStatus }: HeaderProps) {
               />
             </svg>
           </IconButton>
-          <ShareButton />
+          {!IS_SELF_HOSTED && <ShareButton />}
         </div>
 
         {/* Only render PresenceAvatars when actually in collab mode (inside RoomProvider) */}

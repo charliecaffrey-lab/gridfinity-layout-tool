@@ -34,6 +34,7 @@ import { helpJumpEventName } from '@/shared/help/helpJumpDispatcher';
 import { PanelSection } from '@/shared/components/PanelSection';
 import { KdSolverPanel } from '@/shared/kdSolver/KdSolverPanel';
 import { StickyGroupHeader } from '@/shared/components/StickyGroupHeader';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 // Lazy load modals/galleries - only loaded when opened (using lazyWithRetry for PWA resilience)
 const InspirationGallery = lazyWithRetry(() =>
@@ -166,9 +167,11 @@ export function Sidebar() {
               renders null, the usual case) leaves no gap above the dock. */}
           <div className="mt-auto flex w-full flex-col items-center gap-2">
             <AppVersionRailButton />
-            <div className="w-full">
-              <UserDock variant="compact" />
-            </div>
+            {!IS_SELF_HOSTED && (
+              <div className="w-full">
+                <UserDock variant="compact" />
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -224,24 +227,50 @@ export function Sidebar() {
             </div>
 
             {/* Inspiration Gallery - Prominent placement */}
-            <div className="border-y border-stroke-subtle p-(--space-panel)">
-              <Button
-                variant="ghost"
-                fullWidth
-                onClick={() => {
-                  setShowInspirationGallery(true);
-                  if (shouldPulseGallery) dismissGalleryPulse();
-                }}
-                className={`justify-start gap-3 text-left p-3 rounded-lg bg-gradient-to-r from-accent/10 to-info/10 hover:from-accent/20 hover:to-info/20 border border-accent/20 group ${shouldPulseGallery ? 'animate-gallery-pulse' : ''}`}
-              >
-                <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center group-hover:scale-105 transition-transform">
+            {!IS_SELF_HOSTED && (
+              <div className="border-y border-stroke-subtle p-(--space-panel)">
+                <Button
+                  variant="ghost"
+                  fullWidth
+                  onClick={() => {
+                    setShowInspirationGallery(true);
+                    if (shouldPulseGallery) dismissGalleryPulse();
+                  }}
+                  className={`justify-start gap-3 text-left p-3 rounded-lg bg-gradient-to-r from-accent/10 to-info/10 hover:from-accent/20 hover:to-info/20 border border-accent/20 group ${shouldPulseGallery ? 'animate-gallery-pulse' : ''}`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg
+                      className="w-5 h-5 text-accent"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      {ICON_PATHS.dashboard.map((d) => (
+                        <path
+                          key={d}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d={d}
+                        />
+                      ))}
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-content">
+                      {t('sidebar.inspirationGallery')}
+                    </div>
+                    <div className="text-xs text-content-tertiary">
+                      {t('sidebar.inspirationHint')}
+                    </div>
+                  </div>
                   <svg
-                    className="w-5 h-5 text-accent"
+                    className="w-4 h-4 text-content-tertiary group-hover:translate-x-0.5 transition-transform"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
                   >
-                    {ICON_PATHS.dashboard.map((d) => (
+                    {ICON_PATHS.chevronRight.map((d) => (
                       <path
                         key={d}
                         strokeLinecap="round"
@@ -251,33 +280,9 @@ export function Sidebar() {
                       />
                     ))}
                   </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-content">
-                    {t('sidebar.inspirationGallery')}
-                  </div>
-                  <div className="text-xs text-content-tertiary">
-                    {t('sidebar.inspirationHint')}
-                  </div>
-                </div>
-                <svg
-                  className="w-4 h-4 text-content-tertiary group-hover:translate-x-0.5 transition-transform"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  {ICON_PATHS.chevronRight.map((d) => (
-                    <path
-                      key={d}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d={d}
-                    />
-                  ))}
-                </svg>
-              </Button>
-            </div>
+                </Button>
+              </div>
+            )}
 
             <div data-grid-size-panel>
               <StickyGroupHeader
@@ -514,53 +519,61 @@ export function Sidebar() {
 
             {/* Learn links are real <a href> so Google passes link equity from the SPA to
                 /what-is-gridfinity et al. A collapsed group keeps them in the DOM (still crawlable). */}
-            <div>
-              <StickyGroupHeader variant="band" title={t('sidebar.learn')} defaultExpanded={false}>
-                <PanelSection>
-                  <p className="text-xs text-content-tertiary leading-relaxed mb-3">
-                    {t('sidebar.about')}
-                  </p>
-                  <AboutGridfinity className="mb-3" />
-                  <ul className="text-xs leading-relaxed space-y-1">
-                    <li>
-                      <a
-                        href={DOCS_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-content-tertiary hover:text-content hover:underline"
-                      >
-                        {t('help.readDocs')}
-                      </a>
-                    </li>
-                    {LEARN_LINKS.map((link) => (
-                      <li key={link.slug}>
+            {!IS_SELF_HOSTED && (
+              <div>
+                <StickyGroupHeader
+                  variant="band"
+                  title={t('sidebar.learn')}
+                  defaultExpanded={false}
+                >
+                  <PanelSection>
+                    <p className="text-xs text-content-tertiary leading-relaxed mb-3">
+                      {t('sidebar.about')}
+                    </p>
+                    <AboutGridfinity className="mb-3" />
+                    <ul className="text-xs leading-relaxed space-y-1">
+                      <li>
                         <a
-                          href={learnHref(link.slug, link.localized, locale)}
+                          href={DOCS_URL}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-content-tertiary hover:text-content hover:underline"
                         >
-                          {t(link.labelKey)}
+                          {t('help.readDocs')}
                         </a>
                       </li>
-                    ))}
-                  </ul>
-                </PanelSection>
-              </StickyGroupHeader>
-            </div>
+                      {LEARN_LINKS.map((link) => (
+                        <li key={link.slug}>
+                          <a
+                            href={learnHref(link.slug, link.localized, locale)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-content-tertiary hover:text-content hover:underline"
+                          >
+                            {t(link.labelKey)}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </PanelSection>
+                </StickyGroupHeader>
+              </div>
+            )}
 
             {/* Anchor attribution to the bottom so it never floats mid-panel on tall viewports */}
             <div className="mt-auto">
               <AttributionFooter />
             </div>
           </div>
-          <UserDock
-            onOpenSettings={() =>
-              window.dispatchEvent(
-                new CustomEvent('open-settings-modal', { detail: { tab: 'account' } })
-              )
-            }
-          />
+          {!IS_SELF_HOSTED && (
+            <UserDock
+              onOpenSettings={() =>
+                window.dispatchEvent(
+                  new CustomEvent('open-settings-modal', { detail: { tab: 'account' } })
+                )
+              }
+            />
+          )}
         </div>
       )}
 

@@ -31,6 +31,7 @@ import type {
   KdApplyBinsMessage,
   KdEditorMessage,
   KdExportPrintSetMessage,
+  KdImportDesignMessage,
   KdLoadMessage,
 } from './protocol';
 
@@ -50,6 +51,13 @@ export interface KdFittedBinResult {
   reason?: string;
 }
 
+export interface KdImportDesignResult {
+  ok: boolean;
+  name?: string;
+  designId?: string;
+  reason?: string;
+}
+
 export interface KdPrintSetResult {
   ok: boolean;
   linkedBins: number;
@@ -61,6 +69,7 @@ export interface KdBridgeHandlers {
   exportPrintSet?: (message: KdExportPrintSetMessage) => Promise<KdPrintSetResult>;
   addFittedBin?: (message: KdAddFittedBinMessage) => Promise<KdFittedBinResult>;
   applyBins?: (message: KdApplyBinsMessage) => KdApplyBinsResult;
+  importDesign?: (message: KdImportDesignMessage) => Promise<KdImportDesignResult>;
 }
 
 const MAP_KEY = 'kd-drawer-layouts-v1';
@@ -253,6 +262,24 @@ export function startKdEmbedBridge(
         result = { ok: false, reason: 'Applying the plan stopped with an error.' };
       }
       send({ type: 'kd:bins-applied', requestId, ...result });
+      return;
+    }
+
+    if (message.type === 'kd:import-design') {
+      const { requestId } = message;
+      if (!handlers.importDesign) {
+        send({
+          type: 'kd:design-imported',
+          requestId,
+          ok: false,
+          reason: 'This editor build cannot import designs.',
+        });
+      } else {
+        void handlers
+          .importDesign(message)
+          .catch(() => ({ ok: false, reason: 'Importing the design stopped with an error.' }))
+          .then((result) => send({ type: 'kd:design-imported', requestId, ...result }));
+      }
       return;
     }
 

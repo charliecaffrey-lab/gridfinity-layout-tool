@@ -10,6 +10,7 @@
  */
 
 // The editor's own limits on a print bed; this file stays free of imports so the parent app can mirror it.
+const MAX_DESIGN_JSON_CHARS = 8_000_000;
 const BED_MIN_MM = 42;
 const BED_MAX_MM = 3000;
 
@@ -109,7 +110,15 @@ export interface KdApplyBinsMessage {
   add: KdNewBin[];
 }
 
+/** Save a bin design file (the designer's own JSON export) into the design library. */
+export interface KdImportDesignMessage {
+  type: 'kd:import-design';
+  requestId: string;
+  json: string;
+}
+
 export type KdParentMessage =
+  | KdImportDesignMessage
   | KdApplyBinsMessage
   | KdLoadMessage
   | KdGetLayoutMessage
@@ -131,6 +140,14 @@ export type KdEditorMessage =
       added?: { index: number; binId: string }[];
       /** Plain-English lines for changes the editor refused. */
       failed?: string[];
+      reason?: string;
+    }
+  | {
+      type: 'kd:design-imported';
+      requestId: string;
+      ok: boolean;
+      name?: string;
+      designId?: string;
       reason?: string;
     }
   | {
@@ -158,6 +175,13 @@ export function isKdParentMessage(data: unknown): data is KdParentMessage {
   if (typeof data !== 'object' || data === null) return false;
   const message = data as Record<string, unknown>;
   if (message.type === 'kd:get-layout') return typeof message.requestId === 'string';
+  if (message.type === 'kd:import-design') {
+    return (
+      typeof message.requestId === 'string' &&
+      typeof message.json === 'string' &&
+      message.json.length <= MAX_DESIGN_JSON_CHARS
+    );
+  }
   if (message.type === 'kd:export-print-set') {
     const bed = message.bedMm as Record<string, unknown> | null | undefined;
     return (
@@ -270,12 +294,7 @@ export function isKdParentMessage(data: unknown): data is KdParentMessage {
     bed === undefined ||
     (typeof bed === 'object' &&
       bed !== null &&
-      [bed.w, bed.d].every(
-        (v) =>
-          typeof v === 'number' &&
-          v >= BED_MIN_MM &&
-          v <= BED_MAX_MM
-      ));
+      [bed.w, bed.d].every((v) => typeof v === 'number' && v >= BED_MIN_MM && v <= BED_MAX_MM));
   return (
     bedOk &&
     typeof message.drawerId === 'string' &&

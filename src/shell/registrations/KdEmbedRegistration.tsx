@@ -3,6 +3,7 @@ import { startKdEmbedBridge } from '@/shared/kdEmbed/bridge';
 import { readKdParentOrigin } from '@/shared/kdEmbed/protocol';
 import { kdApplyBins } from '@/shell/kdApply/applyBins';
 import { kdAddFittedBin } from '@/shell/kdFitted/addFittedBin';
+import { kdImportDesign } from '@/shell/kdImport/importDesign';
 import { kdExportPrintSet } from '@/shell/kdPrintSet/exportPrintSet';
 import { useLayoutExport } from '@/shell/layoutExport/useLayoutExport';
 
@@ -25,6 +26,7 @@ export function KdEmbedRegistration(): null {
       exportPrintSet: (message) => kdExportPrintSet(message, exportRef.current),
       addFittedBin: kdAddFittedBin,
       applyBins: kdApplyBins,
+      importDesign: kdImportDesign,
     });
   }, []);
   return null;

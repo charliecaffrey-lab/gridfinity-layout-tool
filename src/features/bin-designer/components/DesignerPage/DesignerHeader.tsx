@@ -15,6 +15,7 @@ import { useTranslation } from '@/i18n';
 import { SaveStatusIndicator } from '@/shared/components/SaveStatusIndicator';
 import { LayoutDesignSwitch } from '../LayoutDesignSwitch';
 import type { DesignNameEditor } from './useDesignNameEditor';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 /** Platform modifier key for keyboard shortcut hints */
 const MOD_KEY =
@@ -76,13 +77,15 @@ export function DesignerHeader({ isDesktop, isMobile, nameEditor }: DesignerHead
       <Menu.Item onClick={() => setExportDialogOpen(true)} disabled={!canExport}>
         {t('common.export')}
       </Menu.Item>
-      <Menu.Item
-        onClick={openPublish}
-        disabled={!canPublish}
-        title={t('community.publishButtonAria')}
-      >
-        {t('community.publishButton')}
-      </Menu.Item>
+      {!IS_SELF_HOSTED && (
+        <Menu.Item
+          onClick={openPublish}
+          disabled={!canPublish}
+          title={t('community.publishButtonAria')}
+        >
+          {t('community.publishButton')}
+        </Menu.Item>
+      )}
       <Menu.Item onClick={() => setVersionsOpen(true)}>{t('binDesigner.versions.open')}</Menu.Item>
     </>
   );
@@ -180,28 +183,30 @@ export function DesignerHeader({ isDesktop, isMobile, nameEditor }: DesignerHead
                 {t('community.publish.form.preparingPreview')}
               </span>
             )}
-            <Button
-              variant="ghost"
-              onClick={openPublish}
-              disabled={!canPublish}
-              className="relative px-2 py-1.5 text-sm font-normal rounded-md transition-all text-content-secondary bg-transparent hover:bg-surface-hover hover:text-content flex items-center gap-1.5"
-              title={t('community.publishButtonAria')}
-              aria-label={t('community.publishButtonAria')}
-              aria-describedby={canPublish ? undefined : 'community-publish-disabled-hint'}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                />
-              </svg>
-              {/* Label only on very wide screens: the desktop header's left
+            {!IS_SELF_HOSTED && (
+              <Button
+                variant="ghost"
+                onClick={openPublish}
+                disabled={!canPublish}
+                className="relative px-2 py-1.5 text-sm font-normal rounded-md transition-all text-content-secondary bg-transparent hover:bg-surface-hover hover:text-content flex items-center gap-1.5"
+                title={t('community.publishButtonAria')}
+                aria-label={t('community.publishButtonAria')}
+                aria-describedby={canPublish ? undefined : 'community-publish-disabled-hint'}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                {/* Label only on very wide screens: the desktop header's left
                     cluster overflows into the save indicator at lg widths once
                     a fifth labeled button is present. */}
-              <span className="hidden 2xl:inline">{t('community.publishButton')}</span>
-            </Button>
+                <span className="hidden 2xl:inline">{t('community.publishButton')}</span>
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -358,28 +363,30 @@ export function DesignerHeader({ isDesktop, isMobile, nameEditor }: DesignerHead
                     {t('community.publish.form.preparingPreview')}
                   </span>
                 )}
-                <IconButton
-                  variant="ghost"
-                  className="relative"
-                  onClick={openPublish}
-                  disabled={!canPublish}
-                  aria-label={t('community.publishButtonAria')}
-                  aria-describedby={canPublish ? undefined : 'community-publish-disabled-hint'}
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
+                {!IS_SELF_HOSTED && (
+                  <IconButton
+                    variant="ghost"
+                    className="relative"
+                    onClick={openPublish}
+                    disabled={!canPublish}
+                    aria-label={t('community.publishButtonAria')}
+                    aria-describedby={canPublish ? undefined : 'community-publish-disabled-hint'}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                    />
-                  </svg>
-                </IconButton>
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
+                    </svg>
+                  </IconButton>
+                )}
               </>
             )}
 

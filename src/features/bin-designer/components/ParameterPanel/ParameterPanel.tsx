@@ -55,6 +55,7 @@ import { AttributionFooter } from '@/shared/components/AttributionFooter';
 import { ToolRackParameterPanel } from '../panel/ToolRackSection/ToolRackParameterPanel';
 import { ImportedMeshPanel } from '../panel/ImportedMeshSection/ImportedMeshPanel';
 import { WorkshopPanel } from '../Workshop/WorkshopPanel/WorkshopPanel';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 export interface ParameterPanelProps {
   /** docked = desktop frame (resizable, collapsible); plain = fill the parent. */
@@ -196,56 +197,58 @@ function BinParameterPanel({ frame }: { readonly frame: 'docked' | 'plain' }) {
           the showcase now that the tool switcher holds only the three
           editors, so it opens the gallery on the tab it names rather than on
           whichever tab was last used. */}
-      <div className="border-b border-stroke-subtle px-4 py-3">
-        <Button
-          variant="ghost"
-          onClick={() => openExampleGallery('community')}
-          {...galleryIntent}
-          className="group flex w-full items-center gap-3 rounded-lg border border-accent/20 bg-gradient-to-r from-accent/10 to-info/10 p-3 text-left transition-all hover:from-accent/20 hover:to-info/20"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/20 transition-transform group-hover:scale-105">
+      {!IS_SELF_HOSTED && (
+        <div className="border-b border-stroke-subtle px-4 py-3">
+          <Button
+            variant="ghost"
+            onClick={() => openExampleGallery('community')}
+            {...galleryIntent}
+            className="group flex w-full items-center gap-3 rounded-lg border border-accent/20 bg-gradient-to-r from-accent/10 to-info/10 p-3 text-left transition-all hover:from-accent/20 hover:to-info/20"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/20 transition-transform group-hover:scale-105">
+              <svg
+                className="h-5 w-5 text-accent"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d={ICON_PATHS.community[0]}
+                />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-content">
+                {t('binExamples.sidebarEntry')}
+                {hasUnseenDigest && (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      data-testid="community-digest-dot"
+                      className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent"
+                    />
+                    {/* The dot is aria-hidden; without this the news signal is
+                      visual-only (GalleryTabBar folds it into the tab label). */}
+                    <span className="sr-only">{` ${t('binExamples.gallery.tabs.newBadge')}`}</span>
+                  </>
+                )}
+              </div>
+              <div className="text-xs text-content-tertiary">{t('binExamples.sidebarHint')}</div>
+            </div>
             <svg
-              className="h-5 w-5 text-accent"
+              className="h-4 w-4 text-content-tertiary transition-transform group-hover:translate-x-0.5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d={ICON_PATHS.community[0]}
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-content">
-              {t('binExamples.sidebarEntry')}
-              {hasUnseenDigest && (
-                <>
-                  <span
-                    aria-hidden="true"
-                    data-testid="community-digest-dot"
-                    className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent"
-                  />
-                  {/* The dot is aria-hidden; without this the news signal is
-                      visual-only (GalleryTabBar folds it into the tab label). */}
-                  <span className="sr-only">{` ${t('binExamples.gallery.tabs.newBadge')}`}</span>
-                </>
-              )}
-            </div>
-            <div className="text-xs text-content-tertiary">{t('binExamples.sidebarHint')}</div>
-          </div>
-          <svg
-            className="h-4 w-4 text-content-tertiary transition-transform group-hover:translate-x-0.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Button>
-      </div>
+          </Button>
+        </div>
+      )}
 
       {variant.isVariant && variant.parentParams && (
         <VariantSection
@@ -334,7 +337,7 @@ function BinParameterPanel({ frame }: { readonly frame: 'docked' | 'plain' }) {
         header={communityAndVariant}
         wrapContent={(content) => wrapEditable(content, false)}
         footer={<AttributionFooter />}
-        dock={<UserDock />}
+        dock={IS_SELF_HOSTED ? null : <UserDock />}
       />
     );
   }
@@ -366,7 +369,7 @@ function BinParameterPanel({ frame }: { readonly frame: 'docked' | 'plain' }) {
       }}
       modified={modified}
       warnings={{ print: needsSplit || keptWhole }}
-      dock={<UserDock />}
+      dock={IS_SELF_HOSTED ? null : <UserDock />}
     />
   );
 }

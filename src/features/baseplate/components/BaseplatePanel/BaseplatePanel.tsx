@@ -33,6 +33,7 @@ import { BaseSection } from './BaseSection';
 import { PhysicalUnitsSection } from './PhysicalUnitsSection';
 import type { SplitOverride, StackPrintParams } from '@/core/types';
 import { updateBaseplateParams, useBaseplatePanelDerived } from './panelState';
+import { IS_SELF_HOSTED } from '@/shared/selfHosted';
 
 export function BaseplatePanel() {
   const t = useTranslation();
@@ -117,7 +118,7 @@ export function BaseplatePanel() {
 
         <AttributionFooter />
       </div>
-      <UserDock />
+      {!IS_SELF_HOSTED && <UserDock />}
       <ConfirmDialog
         isOpen={resetConfirmOpen}
         title={t('baseplate.resetConfirmTitle')}

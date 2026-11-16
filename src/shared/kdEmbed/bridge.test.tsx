@@ -40,6 +40,8 @@ describe('protocol', () => {
     expect(isKdParentMessage(load({ bedMm: { w: 330, d: 320 } }))).toBe(true);
     expect(isKdParentMessage(load({ bedMm: { w: 330, d: 5 } }))).toBe(false);
     expect(isKdParentMessage({ ...load(), bedMm: 'a2l' })).toBe(false);
+    expect(isKdParentMessage({ type: 'kd:import-design', requestId: 'r1', json: '{}' })).toBe(true);
+    expect(isKdParentMessage({ type: 'kd:import-design', requestId: 'r1' })).toBe(false);
     expect(isKdParentMessage('kd:load')).toBe(false);
     expect(isKdParentMessage(null)).toBe(false);
   });
