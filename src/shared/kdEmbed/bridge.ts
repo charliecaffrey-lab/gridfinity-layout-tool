@@ -22,7 +22,7 @@ import {
   useSettingsStore,
 } from '@/core/store';
 import type { Layout, LayoutId } from '@/core/types';
-import { layoutId as toLayoutId } from '@/core/types';
+import { layoutId as toLayoutId, mm } from '@/core/types';
 import { buildDrawerLinkLayout } from '@/shared/utils/drawerLink';
 import { validateImport } from '@/shared/utils/validationImport';
 import { isKdParentMessage } from './protocol';
@@ -84,8 +84,15 @@ function rememberLayout(drawerId: string, id: string): void {
   }
 }
 
-/** Parse a saved layout without regenerating ids, so bin ids stay stable across saves. */
+/** The drawer's layout, with pieces split for the chosen printer's bed from the start. */
 export async function kdLayoutFromMessage(message: KdLoadMessage): Promise<Layout | string> {
+  const layout = await layoutFromMessage(message);
+  if (typeof layout === 'string' || message.bedMm === undefined) return layout;
+  return { ...layout, printBedSize: mm(message.bedMm.w), printBedDepth: mm(message.bedMm.d) };
+}
+
+/** Parse a saved layout without regenerating ids, so bin ids stay stable across saves. */
+async function layoutFromMessage(message: KdLoadMessage): Promise<Layout | string> {
   if (message.layoutJson !== null) {
     let parsed: Record<string, unknown>;
     try {

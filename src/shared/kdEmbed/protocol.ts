@@ -9,6 +9,10 @@
  * parent's own address, and answers `kd:print-set-done`.
  */
 
+// The editor's own limits on a print bed; this file stays free of imports so the parent app can mirror it.
+const BED_MIN_MM = 42;
+const BED_MAX_MM = 3000;
+
 /** URL flag that switches the bridge on: `/?kd=1&kdParent=<origin of the parent page>`. */
 export const KD_EMBED_PARAM = 'kd';
 export const KD_PARENT_PARAM = 'kdParent';
@@ -21,6 +25,8 @@ export interface KdLoadMessage {
   interiorMm: { w: number; d: number; h: number };
   /** The drawer's saved layout exactly as this editor exported it, or null for a new drawer. */
   layoutJson: string | null;
+  /** The chosen printer's bed, so pieces are split for it from the moment the drawer opens. */
+  bedMm?: { w: number; d: number };
 }
 
 export interface KdGetLayoutMessage {
@@ -259,7 +265,19 @@ export function isKdParentMessage(data: unknown): data is KdParentMessage {
   }
   if (message.type !== 'kd:load') return false;
   const size = message.interiorMm as Record<string, unknown> | null | undefined;
+  const bed = message.bedMm as Record<string, unknown> | null | undefined;
+  const bedOk =
+    bed === undefined ||
+    (typeof bed === 'object' &&
+      bed !== null &&
+      [bed.w, bed.d].every(
+        (v) =>
+          typeof v === 'number' &&
+          v >= BED_MIN_MM &&
+          v <= BED_MAX_MM
+      ));
   return (
+    bedOk &&
     typeof message.drawerId === 'string' &&
     typeof message.name === 'string' &&
     (message.layoutJson === null || typeof message.layoutJson === 'string') &&

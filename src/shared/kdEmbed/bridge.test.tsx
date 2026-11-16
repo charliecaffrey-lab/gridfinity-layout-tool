@@ -37,6 +37,9 @@ describe('protocol', () => {
     expect(isKdParentMessage({ type: 'kd:get-layout' })).toBe(false);
     expect(isKdParentMessage(load({ interiorMm: { w: 0, d: 550, h: 65 } }))).toBe(false);
     expect(isKdParentMessage({ ...load(), layoutJson: 5 })).toBe(false);
+    expect(isKdParentMessage(load({ bedMm: { w: 330, d: 320 } }))).toBe(true);
+    expect(isKdParentMessage(load({ bedMm: { w: 330, d: 5 } }))).toBe(false);
+    expect(isKdParentMessage({ ...load(), bedMm: 'a2l' })).toBe(false);
     expect(isKdParentMessage('kd:load')).toBe(false);
     expect(isKdParentMessage(null)).toBe(false);
   });
@@ -63,6 +66,24 @@ describe('kdLayoutFromMessage', () => {
     expect(layout.layers[0].id).toBe(saved.layers[0].id);
     expect(layout.name).toBe('Island - Spice drawer');
     expect('_meta' in layout).toBe(false);
+  });
+
+  it("opens a new or a saved drawer set to the chosen printer's bed", async () => {
+    const fresh = await kdLayoutFromMessage(load({ bedMm: { w: 330, d: 320 } }));
+    if (typeof fresh === 'string') throw new Error(fresh);
+    expect([fresh.printBedSize, fresh.printBedDepth]).toEqual([330, 320]);
+
+    const saved = createTestLayout({ bins: [createTestBin({ id: binId('spice-block') })] });
+    const reopened = await kdLayoutFromMessage(
+      load({ layoutJson: exportLayoutJSON(saved), bedMm: { w: 330, d: 320 } })
+    );
+    if (typeof reopened === 'string') throw new Error(reopened);
+    expect([reopened.printBedSize, reopened.printBedDepth]).toEqual([330, 320]);
+    expect(reopened.bins.map((b) => b.id)).toEqual(['spice-block']);
+
+    const untouched = await kdLayoutFromMessage(load({ layoutJson: exportLayoutJSON(saved) }));
+    if (typeof untouched === 'string') throw new Error(untouched);
+    expect(untouched.printBedSize).toBe(saved.printBedSize);
   });
 
   it('explains a layout it cannot read, or a drawer too small for the grid', async () => {
